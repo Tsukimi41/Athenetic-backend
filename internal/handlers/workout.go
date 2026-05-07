@@ -6,7 +6,7 @@ import (
 
 	"github.com/Tsukimi41/Athenetic-backend/internal/database"
 	"github.com/Tsukimi41/Athenetic-backend/internal/models"
-	"github.com/google/uuid"
+	//"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
