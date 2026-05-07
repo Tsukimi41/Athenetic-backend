@@ -6,7 +6,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/tsukimi41/Athenetic-backend/internal/routes"
+	"github.com/Tsukimi41/Athenetic-backend/internal/routes"
 )
 
 func main() {

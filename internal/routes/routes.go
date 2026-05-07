@@ -3,7 +3,7 @@ package routes
 
 import (
 	"github.com/labstack/echo/v4"
-	"github.com/yourusername/athenetic-backend/internal/handlers"
+	"github.com/Tsukimi41/Athenetic-backend/internal/handlers"
 )
 
 // SetupRoutes はEchoインスタンスにルーティングを登録します
