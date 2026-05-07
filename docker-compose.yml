@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  db:
+    # 動作が軽量なAlpine LinuxベースのPostgreSQLを使用
+    image: postgres:15-alpine
+    container_name: athenetic_postgres
+    restart: always
+    environment:
+      # データベースの接続情報（開発用の仮パスワード）
+      POSTGRES_USER: athenetic_user
+      POSTGRES_PASSWORD: athenetic_password
+      POSTGRES_DB: athenetic_db
+    ports:
+      # PCの5432ポートと、コンテナ内の5432ポートを繋ぐ
+      - "5432:5432"
+    volumes:
+      # コンテナを消してもデータが消えないようにPCの領域をマウント
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
