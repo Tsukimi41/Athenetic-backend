@@ -6,12 +6,17 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/Tsukimi41/Athenetic-backend/internal/database"
 	"github.com/Tsukimi41/Athenetic-backend/internal/routes"
 )
 
 func main() {
+	// サーバー起動前にデータベースに接続し、テーブルを自動生成する
+	database.ConnectDB()
 	// Echoインスタンスの作成
 	e := echo.New()
+
+	// ここでミドルウェアの設定やルーティングのセットアップを行います
 
 	// ミドルウェアの設定
 	e.Use(middleware.Logger())  // リクエストのログ出力

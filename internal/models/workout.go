@@ -9,7 +9,7 @@ import (
 
 // 1. Users (ユーザーテーブル)
 type User struct {
-	ID           uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
+	ID           uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
 	Email        string    `gorm:"type:varchar(255);uniqueIndex;not null"`
 	PasswordHash string    `gorm:"type:varchar(255);not null"`
 	Name         string    `gorm:"type:varchar(100)"`
@@ -31,7 +31,7 @@ const (
 )
 
 type Exercise struct {
-	ID           uuid.UUID    `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
+	ID           uuid.UUID    `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
 	Name         string       `gorm:"type:varchar(100);uniqueIndex;not null"`
 	TargetMuscle TargetMuscle `gorm:"type:varchar(50);not null"`
 	IsBodyweight bool         `gorm:"default:true"`
@@ -40,7 +40,7 @@ type Exercise struct {
 
 // 3. WorkoutSessions (セッション・ログテーブル)
 type WorkoutSession struct {
-	ID             uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
+	ID             uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
 	UserID         uuid.UUID `gorm:"type:uuid;index;not null"`
 	Title          string    `gorm:"type:varchar(100)"` // 例: "Upper Body Push"
 	StartTime      time.Time `gorm:"not null"`
@@ -54,7 +54,7 @@ type WorkoutSession struct {
 
 // 4. WorkoutSets (セット詳細テーブル)
 type WorkoutSet struct {
-	ID         uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4();primaryKey"`
+	ID         uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
 	SessionID  uuid.UUID `gorm:"type:uuid;index;not null"`
 	ExerciseID uuid.UUID `gorm:"type:uuid;index;not null"`
 

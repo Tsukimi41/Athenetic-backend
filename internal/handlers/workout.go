@@ -1,64 +1,97 @@
-// internal/handlers/workout.go
 package handlers
 
 import (
 	"net/http"
 	"time"
 
+	"github.com/Tsukimi41/Athenetic-backend/internal/database"
+	"github.com/Tsukimi41/Athenetic-backend/internal/models"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
-// GetTodaysWorkout は本日のトレーニングメニューを返します
+// GetTodaysWorkout は本日のトレーニングメニューを返します（現状は固定モックデータ）
 func GetTodaysWorkout(c echo.Context) error {
-	// ※本来はここでDBにアクセスし、ユーザーの過去の記録や
-	// その日の曜日、レディネススコアに基づいてメニューを動的に生成します。
-
-	// モックデータ: 月曜日の「Upper Body Push」メニュー
 	todaysMenu := map[string]interface{}{
 		"date":            time.Now().Format("2006-01-02"),
 		"title":           "Upper Body Push",
 		"readiness_score": 92,
 		"exercises": []map[string]interface{}{
 			{
-				"id":          uuid.New().String(),
+				"id":          "ex-1",
 				"name":        "Decline Push-up",
 				"target_sets": 3,
-				"history":     "前回: 12 reps (RPE 9)", // 漸進性過負荷の指標
+				"history":     "前回: 12 reps (RPE 9)",
 			},
 			{
-				"id":          uuid.New().String(),
+				"id":          "ex-2",
 				"name":        "Archer Push-up",
 				"target_sets": 2,
 				"history":     "前回: 8 reps (RPE 9.5)",
 			},
-			{
-				"id":          uuid.New().String(),
-				"name":        "Narrow Push-up",
-				"target_sets": 2,
-				"history":     "前回: 10 reps (RPE 10)",
-			},
 		},
 	}
-
-	// JSONとしてクライアント（Next.js）に返却
 	return c.JSON(http.StatusOK, todaysMenu)
 }
 
-// CreateWorkoutRecord は完了したワークアウト結果をDBに保存します
+// Next.jsから送られてくるJSONの形を定義
+type CompleteSetRequest struct {
+	ExerciseName string  `json:"exercise_name"`
+	SetNumber    int     `json:"set_number"`
+	Reps         int     `json:"reps"`
+	RPE          float64 `json:"rpe"`
+}
+
+// CreateWorkoutRecord は完了したセットをPostgreSQLに保存します
 func CreateWorkoutRecord(c echo.Context) error {
-	// リクエストボディからデータを受け取る構造体を定義（modelsから引用）
-	// ※ここでは簡略化のためinterface{}を使用していますが、実際はmodels.WorkoutSessionを使います
-	var record map[string]interface{}
-	
-	if err := c.Bind(&record); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+	var req CompleteSetRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "リクエストの形式が不正です"})
 	}
 
-	// ※ここでGORMを使ってPostgreSQLにINSERTする処理が入ります
+	db := database.DB
 
-	return c.JSON(http.StatusCreated, map[string]string{
-		"message": "Workout successfully recorded",
-		"status":  "success",
+	// 1. ダミーユーザーの確保（将来のログイン機能までの繋ぎ）
+	var user models.User
+	db.FirstOrCreate(&user, models.User{Email: "test@athenetic.app", Name: "Test User"})
+
+	// 2. 今日のセッション（WorkoutSession）の確保
+	var session models.WorkoutSession
+	today := time.Now().Truncate(24 * time.Hour)
+	db.Where("user_id = ? AND start_time >= ?", user.ID, today).
+		FirstOrCreate(&session, models.WorkoutSession{
+			UserID:         user.ID,
+			Title:          "Daily Workout",
+			StartTime:      time.Now(),
+			ReadinessScore: 90,
+		})
+
+	// 3. 種目（Exercise）の確保
+	var exercise models.Exercise
+	db.Where("name = ?", req.ExerciseName).
+		FirstOrCreate(&exercise, models.Exercise{
+			Name:         req.ExerciseName,
+			TargetMuscle: models.Chest, // とりあえず胸として保存
+			IsBodyweight: true,
+		})
+
+	// 4. セットの記録（WorkoutSet）をデータベースに保存！
+	workoutSet := models.WorkoutSet{
+		SessionID:   session.ID,
+		ExerciseID:  exercise.ID,
+		SetNumber:   req.SetNumber,
+		Reps:        req.Reps,
+		RPE:         req.RPE,
+		IsCompleted: true,
+	}
+
+	if err := db.Create(&workoutSet).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "データベースへの保存に失敗しました"})
+	}
+
+	// 成功レスポンス
+	return c.JSON(http.StatusCreated, map[string]interface{}{
+		"message": "Record saved successfully!",
+		"set_id":  workoutSet.ID,
 	})
 }
