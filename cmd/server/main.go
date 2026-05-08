@@ -24,8 +24,19 @@ func main() {
 	
 	// CORS設定（Next.jsからのアクセスを許可するため必須）
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"http://localhost:3000"}, // Next.jsのローカルURL
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+		AllowOrigins: []string{
+			"http://localhost:3000",     // Local dev
+			"http://127.0.0.1:3000",
+			"https://athenetic.vercel.app", // Production
+		},
+		AllowHeaders: []string{
+			echo.HeaderOrigin,
+			echo.HeaderContentType,
+			echo.HeaderAccept,
+			echo.HeaderAuthorization,
+		},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		MaxAge:       3600,
 	}))
 
 	// ルーティングのセットアップ
