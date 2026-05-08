@@ -70,3 +70,32 @@ type WorkoutSet struct {
 	IsCompleted bool `gorm:"default:false"`
 	CreatedAt   time.Time
 }
+
+// 5. DailyReadinessInputs (日次コンディション入力テーブル - Phase 1)
+type DailyReadinessInput struct {
+	ID                    uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	UserID                uuid.UUID `gorm:"type:uuid;index;not null"`
+	InputDate             time.Time `gorm:"type:date;index;not null"`
+	SleepHours            float64   `gorm:"type:numeric(3,1)"`           // 睡眠時間 (0-12h)
+	MuscleSoreness        int       `gorm:"type:int;default:0"`           // 筋肉痛 (0-10)
+	RunningKmPriorDay     float64   `gorm:"type:numeric(5,2);default:0"`  // 前日のランニング距離
+	ReadinessScore        int       `gorm:"type:int"`                     // 計算結果: リーディネススコア (0-100)
+	DeloadFactor          float64   `gorm:"type:numeric(3,2);default:1"`  // 計算結果: デロード係数 (0.7-1.0)
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+
+	// ユニーク制約: ユーザーごとに1日1回のみ
+	// (SQLレベルではUNIQUE(user_id, input_date)で実装)
+}
+
+// 6. NutritionLogs (栄養ログテーブル - Phase 3)
+type NutritionLog struct {
+	ID        uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	UserID    uuid.UUID `gorm:"type:uuid;index;not null"`
+	LogDate   time.Time `gorm:"type:date;index;not null"`
+	FoodName  string    `gorm:"type:varchar(255)"`
+	ProteinG  float64   `gorm:"type:numeric(6,2);default:0"`
+	CarbsG    float64   `gorm:"type:numeric(6,2);default:0"`
+	FatG      float64   `gorm:"type:numeric(6,2);default:0"`
+	CreatedAt time.Time
+}

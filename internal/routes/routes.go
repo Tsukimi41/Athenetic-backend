@@ -19,4 +19,8 @@ func SetupRoutes(e *echo.Echo) {
 	api.POST("/workouts", handlers.CreateWorkoutRecord)
 
 	api.GET("/analytics/volume", handlers.GetWeeklyVolume)
+
+	// Readiness (コンディション管理) - Phase 1
+	api.POST("/readiness", handlers.PostReadiness)
+	api.GET("/readiness/:date", handlers.GetReadiness)
 }

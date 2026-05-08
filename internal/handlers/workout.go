@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Tsukimi41/Athenetic-backend/internal/database"
@@ -17,25 +18,39 @@ func GetTodaysWorkout(c echo.Context) error {
 	var user models.User
 	db.FirstOrCreate(&user, models.User{Email: "test@athenetic.app", Name: "Test User"})
 
+	// Query parameter: muscle_group (default: "chest")
+	muscleGroup := c.QueryParam("muscle_group")
+	if muscleGroup == "" {
+		muscleGroup = "chest"
+	}
+
 	readinessScore := 92
-	exerciseNames := []string{"Decline Push-up", "Archer Push-up"}
+	var exercises []models.Exercise
+	
+	// Fetch exercises for the specified muscle group (case-insensitive)
+	// CRITICAL RULE: Always use LOWER() for string comparisons
+	db.Where("LOWER(target_muscle) = LOWER(?)", muscleGroup).Find(&exercises)
+
+	// If no exercises found, return error
+	if len(exercises) == 0 {
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"date":            time.Now().Format("2006-01-02"),
+			"title":           "No exercises for " + muscleGroup,
+			"readiness_score": readinessScore,
+			"exercises":       []map[string]interface{}{},
+		})
+	}
+
 	var exercisesData []map[string]interface{}
 
-	for _, name := range exerciseNames {
-		var exercise models.Exercise
-		db.Where("name = ?", name).FirstOrCreate(&exercise, models.Exercise{
-			Name:         name,
-			TargetMuscle: models.Chest,
-			IsBodyweight: true,
-		})
-
+	for _, exercise := range exercises {
 		var lastSet models.WorkoutSet
 		result := db.Where("exercise_id = ? AND is_completed = ?", exercise.ID, true).
 			Order("created_at desc").First(&lastSet)
 
 		targetSets := 3
 		targetReps := 10
-		historyText := "初回トライアル: 目安10 reps"
+		historyText := "First attempt: aim for 10 reps"
 
 		if result.RowsAffected > 0 {
 			targetReps = lastSet.Reps
@@ -44,7 +59,7 @@ func GetTodaysWorkout(c echo.Context) error {
 			} else if lastSet.RPE <= 9.0 {
 				targetReps += 1
 			}
-			historyText = fmt.Sprintf("前回: %d reps (RPE %.1f)", lastSet.Reps, lastSet.RPE)
+			historyText = fmt.Sprintf("Previous: %d reps (RPE %.1f)", lastSet.Reps, lastSet.RPE)
 		}
 
 		exercisesData = append(exercisesData, map[string]interface{}{
@@ -56,9 +71,22 @@ func GetTodaysWorkout(c echo.Context) error {
 		})
 	}
 
+	title := map[string]string{
+		"chest":      "Upper Body Push",
+		"back":       "Upper Body Pull",
+		"legs":       "Lower Body Strength",
+		"shoulders":  "Shoulder Development",
+		"core":       "Core Stability",
+	}[muscleGroup]
+
+	if title == "" {
+		title = "Strength Training"
+	}
+
 	todaysMenu := map[string]interface{}{
 		"date":            time.Now().Format("2006-01-02"),
-		"title":           "Upper Body Push",
+		"title":           title,
+		"muscle_group":    muscleGroup,
 		"readiness_score": readinessScore,
 		"exercises":       exercisesData,
 	}
@@ -141,7 +169,9 @@ func GetWeeklyVolume(c echo.Context) error {
 	// 3. 種目ID -> 部位名 のマップを作成（現在の登録状況をターミナルに暴露します）
 	exMap := make(map[string]string)
 	for _, ex := range exercises {
+		// CRITICAL RULE: Always use LOWER() for string comparisons
 		muscleStr := fmt.Sprintf("%v", ex.TargetMuscle)
+		muscleStr = strings.ToLower(muscleStr)
 		exMap[ex.ID.String()] = muscleStr
 		fmt.Printf("🔍 種目: %s -> 登録されている部位: '%s'\n", ex.Name, muscleStr)
 	}
@@ -152,12 +182,12 @@ func GetWeeklyVolume(c echo.Context) error {
 	for _, s := range allSets {
 		muscle := exMap[s.ExerciseID.String()]
 		
-		// "Chest" はもちろん、過去のバグで空っぽ "" になっているものもChestとして拾い上げる
-		if muscle == "Chest" || muscle == "chest" || muscle == "" {
+		// Case-insensitive matching
+		if muscle == "chest" {
 			volumeData["Chest"]++
-		} else if muscle == "Back" || muscle == "back" {
+		} else if muscle == "back" {
 			volumeData["Back"]++
-		} else if muscle == "Legs" || muscle == "legs" {
+		} else if muscle == "legs" {
 			volumeData["Legs"]++
 		}
 	}

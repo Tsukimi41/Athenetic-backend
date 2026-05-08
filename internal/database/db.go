@@ -30,13 +30,62 @@ func ConnectDB() {
 		&models.Exercise{},
 		&models.WorkoutSession{},
 		&models.WorkoutSet{},
+		&models.DailyReadinessInput{},
+		&models.NutritionLog{},
 	)
 	if err != nil {
 		log.Fatal("Failed to auto migrate database!\n", err)
 	}
 
+	// ユニーク制約を追加 (user_id, input_date)
+	db.Migrator().CreateConstraint(&models.DailyReadinessInput{}, "uni_user_date")
+	if !db.Migrator().HasConstraint(&models.DailyReadinessInput{}, "uni_user_date") {
+		db.Exec(`ALTER TABLE daily_readiness_inputs ADD CONSTRAINT uni_user_date UNIQUE(user_id, input_date)`)
+	}
+
 	log.Println("Database Auto Migration completed")
+
+	// Seed exercises (Phase 1: Chest, Back, Legs)
+	seedExercises(db)
 
 	// 接続が成功したらグローバル変数に格納
 	DB = db
+}
+
+// seedExercises: 種目マスターデータを初期化
+func seedExercises(db *gorm.DB) {
+	exercises := []models.Exercise{
+		// Chest (Push)
+		{Name: "Barbell Bench Press", TargetMuscle: models.Chest, IsBodyweight: false},
+		{Name: "Decline Push-up", TargetMuscle: models.Chest, IsBodyweight: true},
+		{Name: "Archer Push-up", TargetMuscle: models.Chest, IsBodyweight: true},
+		{Name: "Dumbbell Flyes", TargetMuscle: models.Chest, IsBodyweight: false},
+
+		// Back (Pull)
+		{Name: "Pull-ups", TargetMuscle: models.Back, IsBodyweight: true},
+		{Name: "Barbell Rows", TargetMuscle: models.Back, IsBodyweight: false},
+		{Name: "Lat Pulldowns", TargetMuscle: models.Back, IsBodyweight: false},
+		{Name: "Reverse Flyes", TargetMuscle: models.Back, IsBodyweight: false},
+
+		// Legs
+		{Name: "Barbell Squats", TargetMuscle: models.Legs, IsBodyweight: false},
+		{Name: "Leg Press", TargetMuscle: models.Legs, IsBodyweight: false},
+		{Name: "Deadlifts", TargetMuscle: models.Legs, IsBodyweight: false},
+		{Name: "Bulgarian Split Squats", TargetMuscle: models.Legs, IsBodyweight: true},
+
+		// Shoulders
+		{Name: "Overhead Press", TargetMuscle: models.Shoulders, IsBodyweight: false},
+		{Name: "Lateral Raises", TargetMuscle: models.Shoulders, IsBodyweight: false},
+	}
+
+	// Only insert if not already present
+	for _, ex := range exercises {
+		var existing models.Exercise
+		// Case-insensitive check
+		result := db.Where("LOWER(name) = LOWER(?)", ex.Name).First(&existing)
+		if result.RowsAffected == 0 {
+			db.Create(&ex)
+			log.Printf("✅ Seeded exercise: %s (%s)\n", ex.Name, ex.TargetMuscle)
+		}
+	}
 }
