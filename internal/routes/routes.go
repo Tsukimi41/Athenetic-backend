@@ -17,4 +17,6 @@ func SetupRoutes(e *echo.Echo) {
 	
 	// 例: POST /api/v1/workouts -> ワークアウト結果を保存
 	api.POST("/workouts", handlers.CreateWorkoutRecord)
+
+	api.GET("/analytics/volume", handlers.GetWeeklyVolume)
 }
