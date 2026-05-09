@@ -14,6 +14,8 @@ type User struct {
 	PasswordHash string    `gorm:"type:varchar(255);not null"`
 	Name         string    `gorm:"type:varchar(100)"`
 	BodyWeight   float64   `gorm:"type:numeric(5,2)"` // 自重負荷の計算用
+	TargetBodyWeight  float64 `gorm:"type:numeric(5,2)"`
+	BodyFatPercentage float64 `gorm:"type:numeric(4,1)"` // 最新の体脂肪率
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	DeletedAt    gorm.DeletedAt `gorm:"index"`

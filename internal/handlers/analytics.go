@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Tsukimi41/Athenetic-backend/internal/database"
@@ -17,28 +18,93 @@ type volumeRow struct {
 	RPEAvg     float64   `gorm:"column:rpe_avg"`
 }
 
+type multiVolumeRow struct {
+	WeekStart  time.Time `gorm:"column:week_start"`
+	Muscle     string    `gorm:"column:muscle"`
+	VolumeLoad float64   `gorm:"column:volume_load"`
+}
+
 func GetVolumeProgression(c echo.Context) error {
 	userID, err := getUserID(c)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
 
-	muscleGroup := c.QueryParam("muscle_group")
+	muscleGroup := strings.ToLower(strings.TrimSpace(c.QueryParam("muscle_group")))
 	if muscleGroup == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "muscle_group is required"})
 	}
-	if _, err := parseMuscleGroup(muscleGroup); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid muscle_group"})
+	if muscleGroup != "all" {
+		if _, err := parseMuscleGroup(muscleGroup); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid muscle_group"})
+		}
 	}
 
 	weeks := parseWeeks(c.QueryParam("weeks"), 12, 1, 52)
 	start := startOfWeek(time.Now().UTC()).AddDate(0, 0, -7*(weeks-1))
 
 	db := database.DB
+	if muscleGroup == "all" {
+		query := db.Model(&models.WorkoutSet{}).
+			Select("DATE_TRUNC('week', workout_sets.created_at) AS week_start, LOWER(e.target_muscle) AS muscle, COALESCE(SUM((CASE WHEN e.is_bodyweight THEN COALESCE(NULLIF(workout_sets.weight, 0), u.body_weight, 0) ELSE workout_sets.weight END) * workout_sets.reps), 0) AS volume_load").
+			Joins("JOIN workout_sessions ws ON ws.id = workout_sets.session_id").
+			Joins("JOIN exercises e ON e.id = workout_sets.exercise_id").
+			Joins("JOIN users u ON u.id = ws.user_id").
+			Where("ws.user_id = ?", userID).
+			Where("workout_sets.created_at >= ?", start).
+			Group("week_start, muscle").
+			Order("week_start ASC")
+
+		var rows []multiVolumeRow
+		if err := query.Scan(&rows).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to load progression"})
+		}
+
+		rowMap := map[string]map[string]float64{}
+		for _, row := range rows {
+			key := row.WeekStart.Format("2006-01-02")
+			if rowMap[key] == nil {
+				rowMap[key] = map[string]float64{}
+			}
+			rowMap[key][row.Muscle] = row.VolumeLoad
+		}
+
+		response := make([]map[string]interface{}, 0, weeks)
+		for i := 0; i < weeks; i++ {
+			weekStart := start.AddDate(0, 0, 7*i)
+			key := weekStart.Format("2006-01-02")
+			row := rowMap[key]
+
+			item := map[string]interface{}{
+				"week":       i + 1,
+				"week_start": key,
+				"chest":      0.0,
+				"back":       0.0,
+				"legs":       0.0,
+			}
+			if row != nil {
+				if value, ok := row["chest"]; ok {
+					item["chest"] = value
+				}
+				if value, ok := row["back"]; ok {
+					item["back"] = value
+				}
+				if value, ok := row["legs"]; ok {
+					item["legs"] = value
+				}
+			}
+
+			response = append(response, item)
+		}
+
+		return c.JSON(http.StatusOK, response)
+	}
+
 	query := db.Model(&models.WorkoutSet{}).
-		Select("DATE_TRUNC('week', workout_sets.created_at) AS week_start, COALESCE(SUM(workout_sets.weight * workout_sets.reps), 0) AS volume_load, COUNT(workout_sets.id) AS total_sets, COALESCE(AVG(workout_sets.rpe), 0) AS rpe_avg").
+		Select("DATE_TRUNC('week', workout_sets.created_at) AS week_start, COALESCE(SUM((CASE WHEN e.is_bodyweight THEN COALESCE(NULLIF(workout_sets.weight, 0), u.body_weight, 0) ELSE workout_sets.weight END) * workout_sets.reps), 0) AS volume_load, COUNT(workout_sets.id) AS total_sets, COALESCE(AVG(workout_sets.rpe), 0) AS rpe_avg").
 		Joins("JOIN workout_sessions ws ON ws.id = workout_sets.session_id").
 		Joins("JOIN exercises e ON e.id = workout_sets.exercise_id").
+		Joins("JOIN users u ON u.id = ws.user_id").
 		Where("ws.user_id = ?", userID).
 		Where("workout_sets.created_at >= ?", start).
 		Where("LOWER(e.target_muscle) = LOWER(?)", muscleGroup).
@@ -119,9 +185,10 @@ func GetProgressSummary(c echo.Context) error {
 func volumeForRange(userID interface{}, start time.Time, end time.Time, muscleGroup string) float64 {
 	db := database.DB
 	query := db.Model(&models.WorkoutSet{}).
-		Select("COALESCE(SUM(workout_sets.weight * workout_sets.reps), 0) AS volume_load").
+		Select("COALESCE(SUM((CASE WHEN e.is_bodyweight THEN COALESCE(NULLIF(workout_sets.weight, 0), u.body_weight, 0) ELSE workout_sets.weight END) * workout_sets.reps), 0) AS volume_load").
 		Joins("JOIN workout_sessions ws ON ws.id = workout_sets.session_id").
 		Joins("JOIN exercises e ON e.id = workout_sets.exercise_id").
+		Joins("JOIN users u ON u.id = ws.user_id").
 		Where("ws.user_id = ?", userID).
 		Where("workout_sets.created_at >= ? AND workout_sets.created_at < ?", start, end)
 

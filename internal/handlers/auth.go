@@ -41,12 +41,16 @@ type MeResponse struct {
 	Email      string    `json:"email"`
 	Name       string    `json:"name"`
 	BodyWeight float64   `json:"body_weight_kg"`
+	TargetBodyWeight float64 `json:"target_body_weight_kg"`
+	BodyFatPercentage float64 `json:"body_fat_percentage"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
 type UpdateMeRequest struct {
 	Name       *string  `json:"name"`
 	BodyWeight *float64 `json:"body_weight_kg"`
+	TargetBodyWeight *float64 `json:"target_body_weight_kg"`
+	BodyFatPercentage *float64 `json:"body_fat_percentage"`
 }
 
 func Signup(c echo.Context) error {
@@ -254,6 +258,8 @@ func Me(c echo.Context) error {
 		Email:      user.Email,
 		Name:       user.Name,
 		BodyWeight: user.BodyWeight,
+		TargetBodyWeight: user.TargetBodyWeight,
+		BodyFatPercentage: user.BodyFatPercentage,
 		CreatedAt:  user.CreatedAt,
 	})
 }
@@ -279,6 +285,18 @@ func UpdateMe(c echo.Context) error {
 		}
 		updates["body_weight"] = *req.BodyWeight
 	}
+	if req.TargetBodyWeight != nil {
+		if *req.TargetBodyWeight < 0 {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "target_body_weight_kg must be positive"})
+		}
+		updates["target_body_weight"] = *req.TargetBodyWeight
+	}
+	if req.BodyFatPercentage != nil {
+		if *req.BodyFatPercentage < 0 || *req.BodyFatPercentage > 100 {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "body_fat_percentage must be between 0 and 100"})
+		}
+		updates["body_fat_percentage"] = *req.BodyFatPercentage
+	}
 	if len(updates) == 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "no fields to update"})
 	}
@@ -298,6 +316,8 @@ func UpdateMe(c echo.Context) error {
 		Email:      user.Email,
 		Name:       user.Name,
 		BodyWeight: user.BodyWeight,
+		TargetBodyWeight: user.TargetBodyWeight,
+		BodyFatPercentage: user.BodyFatPercentage,
 		CreatedAt:  user.CreatedAt,
 	})
 }

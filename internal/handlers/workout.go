@@ -153,6 +153,14 @@ func CreateWorkoutRecord(c echo.Context) error {
 		IsBodyweight:      true,
 	})
 
+	weight := req.WeightKg
+	if exercise.IsBodyweight && weight <= 0 {
+		var user models.User
+		if err := db.First(&user, "id = ?", userID).Error; err == nil && user.BodyWeight > 0 {
+			weight = user.BodyWeight
+		}
+	}
+
 	readinessScore := 90
 	var readiness models.DailyReadinessInput
 	if err := db.Where("user_id = ? AND DATE(input_date) = ?", userID, time.Now().Format("2006-01-02")).First(&readiness).Error; err == nil {
@@ -179,7 +187,7 @@ func CreateWorkoutRecord(c echo.Context) error {
 		SetNumber:   req.SetNumber,
 		Reps:        req.Reps,
 		TargetReps:  req.TargetReps,
-		Weight:      req.WeightKg,
+		Weight:      weight,
 		RPE:         req.RPE,
 		IsCompleted: true,
 	}

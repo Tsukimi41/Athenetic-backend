@@ -27,6 +27,7 @@ type SessionSetResponse struct {
 	Exercise      SessionExerciseResponse `json:"exercise"`
 	WeightKg      float64                 `json:"weight_kg"`
 	RepsCompleted int                     `json:"reps_completed"`
+	TargetReps    int                     `json:"target_reps"`
 	RPE           float64                 `json:"rpe"`
 	RIR           int                     `json:"rir"`
 	TargetRepsNext int                    `json:"target_reps_next"`
@@ -153,6 +154,7 @@ func GetSessionsByDate(c echo.Context) error {
 				},
 				WeightKg:      set.Weight,
 				RepsCompleted: set.Reps,
+				TargetReps:    set.TargetReps,
 				RPE:           set.RPE,
 				RIR:           set.RIR,
 				TargetRepsNext: calculateNextReps(set.RPE, set.Reps, set.TargetReps),
