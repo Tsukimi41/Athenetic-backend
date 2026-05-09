@@ -15,16 +15,26 @@ import (
 func GetTodaysWorkout(c echo.Context) error {
 	db := database.DB
 
-	var user models.User
-	db.FirstOrCreate(&user, models.User{Email: "test@athenetic.app", Name: "Test User"})
+	userID, err := getUserID(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
 
 	// Query parameter: muscle_group (default: "chest")
 	muscleGroup := c.QueryParam("muscle_group")
 	if muscleGroup == "" {
 		muscleGroup = "chest"
 	}
+	muscleGroup = strings.ToLower(muscleGroup)
 
-	readinessScore := 92
+	readinessScore := 90
+	deloadFactor := 1.0
+	today := time.Now().Format("2006-01-02")
+	var readiness models.DailyReadinessInput
+	if err := db.Where("user_id = ? AND DATE(input_date) = ?", userID, today).First(&readiness).Error; err == nil {
+		readinessScore = readiness.ReadinessScore
+		deloadFactor = readiness.DeloadFactor
+	}
 	var exercises []models.Exercise
 	
 	// Fetch exercises for the specified muscle group (case-insensitive)
@@ -45,10 +55,21 @@ func GetTodaysWorkout(c echo.Context) error {
 
 	for _, exercise := range exercises {
 		var lastSet models.WorkoutSet
-		result := db.Where("exercise_id = ? AND is_completed = ?", exercise.ID, true).
-			Order("created_at desc").First(&lastSet)
+		result := db.Model(&models.WorkoutSet{}).
+			Joins("JOIN workout_sessions ws ON ws.id = workout_sets.session_id").
+			Where("ws.user_id = ?", userID).
+			Where("workout_sets.exercise_id = ? AND workout_sets.is_completed = ?", exercise.ID, true).
+			Order("workout_sets.created_at desc").
+			First(&lastSet)
 
-		targetSets := 3
+		defaultSets := exercise.DefaultTargetSets
+		if defaultSets < 1 {
+			defaultSets = 3
+		}
+		targetSets := int(float64(defaultSets) * deloadFactor)
+		if targetSets < 1 {
+			targetSets = 1
+		}
 		targetReps := 10
 		historyText := "First attempt: aim for 10 reps"
 
@@ -99,6 +120,8 @@ type CompleteSetRequest struct {
 	SetNumber    int     `json:"set_number"`
 	Reps         int     `json:"reps"`
 	RPE          float64 `json:"rpe"`
+	WeightKg     float64 `json:"weight_kg"`
+	TargetReps   int     `json:"target_reps"`
 }
 
 // --- 2. POST: セットの保存 ---
@@ -108,35 +131,55 @@ func CreateWorkoutRecord(c echo.Context) error {
 		fmt.Println("❌ [POSTエラー] リクエスト解析失敗:", err)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "リクエスト形式エラー"})
 	}
+	if req.WeightKg < 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "weight_kg must be positive"})
+	}
+	if req.TargetReps <= 0 {
+		req.TargetReps = req.Reps
+	}
 
 	db := database.DB
-	var user models.User
-	db.FirstOrCreate(&user, models.User{Email: "test@athenetic.app", Name: "Test User"})
 
-	// 日付による検索バグを防ぐため、シンプルな文字列検索に統一
-	var session models.WorkoutSession
-	if err := db.Where("user_id = ? AND title = ?", user.ID, "Daily Workout").First(&session).Error; err != nil {
-		session = models.WorkoutSession{
-			UserID:         user.ID,
-			Title:          "Daily Workout",
-			StartTime:      time.Now(),
-			ReadinessScore: 90,
-		}
-		db.Create(&session)
+	userID, err := getUserID(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
 
 	var exercise models.Exercise
-	db.Where("name = ?", req.ExerciseName).FirstOrCreate(&exercise, models.Exercise{
-		Name:         req.ExerciseName,
-		TargetMuscle: models.Chest,
-		IsBodyweight: true,
+	db.Where("LOWER(name) = LOWER(?)", req.ExerciseName).FirstOrCreate(&exercise, models.Exercise{
+		Name:              req.ExerciseName,
+		TargetMuscle:      models.Chest,
+		DefaultTargetSets: 3,
+		IsBodyweight:      true,
 	})
+
+	readinessScore := 90
+	var readiness models.DailyReadinessInput
+	if err := db.Where("user_id = ? AND DATE(input_date) = ?", userID, time.Now().Format("2006-01-02")).First(&readiness).Error; err == nil {
+		readinessScore = readiness.ReadinessScore
+	}
+
+	// Ensure a session exists for today and muscle group
+	var session models.WorkoutSession
+	if err := db.Where("user_id = ? AND DATE(session_date) = ? AND LOWER(muscle_group) = LOWER(?)", userID, time.Now().Format("2006-01-02"), exercise.TargetMuscle).First(&session).Error; err != nil {
+		session = models.WorkoutSession{
+			UserID:         userID,
+			Title:          "Daily Workout",
+			SessionDate:    time.Now(),
+			MuscleGroup:    exercise.TargetMuscle,
+			StartTime:      time.Now(),
+			ReadinessScore: readinessScore,
+		}
+		db.Create(&session)
+	}
 
 	workoutSet := models.WorkoutSet{
 		SessionID:   session.ID,
 		ExerciseID:  exercise.ID,
 		SetNumber:   req.SetNumber,
 		Reps:        req.Reps,
+		TargetReps:  req.TargetReps,
+		Weight:      req.WeightKg,
 		RPE:         req.RPE,
 		IsCompleted: true,
 	}
@@ -156,9 +199,24 @@ func CreateWorkoutRecord(c echo.Context) error {
 func GetWeeklyVolume(c echo.Context) error {
 	db := database.DB
 
+	userID, err := getUserID(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
+
+	startOfWeek := time.Now().Truncate(24 * time.Hour)
+	for startOfWeek.Weekday() != time.Monday {
+		startOfWeek = startOfWeek.AddDate(0, 0, -1)
+	}
+
 	// 1. 複雑な条件（セッションIDや日付）をすべて取り払い、とにかく完了済みの全セットを強制取得
 	var allSets []models.WorkoutSet
-	db.Where("is_completed = ?", true).Find(&allSets)
+	db.Model(&models.WorkoutSet{}).
+		Joins("JOIN workout_sessions ws ON ws.id = workout_sets.session_id").
+		Where("ws.user_id = ?", userID).
+		Where("workout_sets.is_completed = ?", true).
+		Where("workout_sets.created_at >= ?", startOfWeek).
+		Find(&allSets)
 
 	fmt.Printf("\n🔍 [分析API起動] DBから取得した完了済み全セット数: %d\n", len(allSets))
 

@@ -9,7 +9,7 @@ import (
 	"github.com/Tsukimi41/Athenetic-backend/internal/database"
 	"github.com/Tsukimi41/Athenetic-backend/internal/models"
 	"github.com/labstack/echo/v4"
-	"gorm.io/clause"
+	"gorm.io/gorm/clause"
 )
 
 // --- 1. Request DTO ---
@@ -82,12 +82,13 @@ func GetReadiness(c echo.Context) error {
 		})
 	}
 
-	// Hardcoded user for now (Phase 2: add JWT auth)
-	var user models.User
-	db.FirstOrCreate(&user, models.User{Email: "test@athenetic.app", Name: "Test User"})
+	userID, err := getUserID(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
 
 	var readiness models.DailyReadinessInput
-	result := db.Where("user_id = ? AND DATE(input_date) = ?", user.ID, inputDate.Format("2006-01-02")).
+	result := db.Where("user_id = ? AND DATE(input_date) = ?", userID, inputDate.Format("2006-01-02")).
 		First(&readiness)
 
 	if result.RowsAffected == 0 {
@@ -143,9 +144,10 @@ func PostReadiness(c echo.Context) error {
 
 	db := database.DB
 
-	// Hardcoded user for now (Phase 2: add JWT auth)
-	var user models.User
-	db.FirstOrCreate(&user, models.User{Email: "test@athenetic.app", Name: "Test User"})
+	userID, err := getUserID(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+	}
 
 	// Calculate readiness
 	score, deloadFactor := CalculateReadinessScore(
@@ -171,7 +173,7 @@ func PostReadiness(c echo.Context) error {
 	// Save to database
 	// First, try to update existing record for this day
 	readiness := models.DailyReadinessInput{
-		UserID:            user.ID,
+		UserID:            userID,
 		InputDate:         inputDate,
 		SleepHours:        req.SleepHours,
 		MuscleSoreness:    req.MuscleSoreness,

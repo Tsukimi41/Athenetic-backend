@@ -2,6 +2,7 @@ package database
 
 import (
 	"log"
+	"os"
 
 	// 先ほど作成したmodelsパッケージをインポート
 	"github.com/Tsukimi41/Athenetic-backend/internal/models"
@@ -14,7 +15,10 @@ var DB *gorm.DB
 
 func ConnectDB() {
 	// docker-compose.yml で設定した情報と完全に一致させる
-	dsn := "host=localhost user=athenetic_user password=athenetic_password dbname=athenetic_db port=5432 sslmode=disable TimeZone=Asia/Tokyo"
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "host=localhost user=athenetic_user password=athenetic_password dbname=athenetic_db port=5432 sslmode=disable TimeZone=Asia/Tokyo"
+	}
 	
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -32,6 +36,7 @@ func ConnectDB() {
 		&models.WorkoutSet{},
 		&models.DailyReadinessInput{},
 		&models.NutritionLog{},
+		&models.RefreshToken{},
 	)
 	if err != nil {
 		log.Fatal("Failed to auto migrate database!\n", err)
@@ -56,26 +61,26 @@ func ConnectDB() {
 func seedExercises(db *gorm.DB) {
 	exercises := []models.Exercise{
 		// Chest (Push)
-		{Name: "Barbell Bench Press", TargetMuscle: models.Chest, IsBodyweight: false},
-		{Name: "Decline Push-up", TargetMuscle: models.Chest, IsBodyweight: true},
-		{Name: "Archer Push-up", TargetMuscle: models.Chest, IsBodyweight: true},
-		{Name: "Dumbbell Flyes", TargetMuscle: models.Chest, IsBodyweight: false},
+			{Name: "Barbell Bench Press", TargetMuscle: models.Chest, DefaultTargetSets: 3, IsBodyweight: false},
+			{Name: "Decline Push-up", TargetMuscle: models.Chest, DefaultTargetSets: 3, IsBodyweight: true},
+			{Name: "Archer Push-up", TargetMuscle: models.Chest, DefaultTargetSets: 3, IsBodyweight: true},
+			{Name: "Dumbbell Flyes", TargetMuscle: models.Chest, DefaultTargetSets: 3, IsBodyweight: false},
 
 		// Back (Pull)
-		{Name: "Pull-ups", TargetMuscle: models.Back, IsBodyweight: true},
-		{Name: "Barbell Rows", TargetMuscle: models.Back, IsBodyweight: false},
-		{Name: "Lat Pulldowns", TargetMuscle: models.Back, IsBodyweight: false},
-		{Name: "Reverse Flyes", TargetMuscle: models.Back, IsBodyweight: false},
+			{Name: "Pull-ups", TargetMuscle: models.Back, DefaultTargetSets: 3, IsBodyweight: true},
+			{Name: "Barbell Rows", TargetMuscle: models.Back, DefaultTargetSets: 3, IsBodyweight: false},
+			{Name: "Lat Pulldowns", TargetMuscle: models.Back, DefaultTargetSets: 3, IsBodyweight: false},
+			{Name: "Reverse Flyes", TargetMuscle: models.Back, DefaultTargetSets: 3, IsBodyweight: false},
 
 		// Legs
-		{Name: "Barbell Squats", TargetMuscle: models.Legs, IsBodyweight: false},
-		{Name: "Leg Press", TargetMuscle: models.Legs, IsBodyweight: false},
-		{Name: "Deadlifts", TargetMuscle: models.Legs, IsBodyweight: false},
-		{Name: "Bulgarian Split Squats", TargetMuscle: models.Legs, IsBodyweight: true},
+			{Name: "Barbell Squats", TargetMuscle: models.Legs, DefaultTargetSets: 3, IsBodyweight: false},
+			{Name: "Leg Press", TargetMuscle: models.Legs, DefaultTargetSets: 3, IsBodyweight: false},
+			{Name: "Deadlifts", TargetMuscle: models.Legs, DefaultTargetSets: 3, IsBodyweight: false},
+			{Name: "Bulgarian Split Squats", TargetMuscle: models.Legs, DefaultTargetSets: 3, IsBodyweight: true},
 
 		// Shoulders
-		{Name: "Overhead Press", TargetMuscle: models.Shoulders, IsBodyweight: false},
-		{Name: "Lateral Raises", TargetMuscle: models.Shoulders, IsBodyweight: false},
+			{Name: "Overhead Press", TargetMuscle: models.Shoulders, DefaultTargetSets: 3, IsBodyweight: false},
+			{Name: "Lateral Raises", TargetMuscle: models.Shoulders, DefaultTargetSets: 3, IsBodyweight: false},
 	}
 
 	// Only insert if not already present
